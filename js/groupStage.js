@@ -1,3 +1,11 @@
+import {
+	displayGroupResults,
+	printFinalGroupStandings,
+	displayAdvancingTeams,
+} from './printResult.js';
+import { bubbleSort } from './sort.js';
+import { rankTeamByPosition } from './rankTeambyPosition.js';
+
 export function groupStageResults(groupStageMatches) {
 	const resultsByRound = [];
 	const permutations = [
@@ -23,110 +31,78 @@ export function groupStageResults(groupStageMatches) {
 					groupTeams[team1Index],
 					groupTeams[team2Index]
 				);
-
-				const team1Stats = finalPlacement.groups[group][team1Index];
-				const team2Stats = finalPlacement.groups[group][team2Index];
-
-				// Ažuriranje statistike timova
-				team1Stats.scored += matchResult.team1FinalScore;
-				team1Stats.conceded += matchResult.team2FinalScore;
-				team2Stats.scored += matchResult.team2FinalScore;
-				team2Stats.conceded += matchResult.team1FinalScore;
-
-				team1Stats.pointDifference +=
-					matchResult.team1FinalScore - matchResult.team2FinalScore;
-				team2Stats.pointDifference +=
-					matchResult.team2FinalScore - matchResult.team1FinalScore;
-
-				if (matchResult.team1FinalScore > matchResult.team2FinalScore) {
-					team1Stats.wins += 1;
-					team2Stats.losses += 1;
-				} else {
-					team2Stats.wins += 1;
-					team1Stats.losses += 1;
-				}
-
-				console.log(team1Stats);
-				console.log(team2Stats);
-
-				// Ažuriranje bodova
-				team1Stats.points = team1Stats.wins * 2 + team1Stats.losses;
-				team2Stats.points = team2Stats.wins * 2 + team2Stats.losses;
-
+				updateTable(matchResult, finalPlacement.groups[group]);
 				roundResults.groups[group].push(matchResult);
+				groupTeams[team1Index].Form += matchResult.team1Form;
+				groupTeams[team2Index].Form += matchResult.team2Form;
 			}
-			finalPlacement.groups[group].sort(
-				(a, b) =>
-					b.points - a.points || b.pointDifference - a.pointDifference
-			);
+			bubbleSort(finalPlacement.groups[group]);
 		});
 
 		resultsByRound.push(roundResults);
 	}
 
-	displayResults(resultsByRound);
-	// console.log(resultsByRound);
-	printFinalStandings(finalPlacement);
-
-	return resultsByRound;
+	displayGroupResults(resultsByRound);
+	printFinalGroupStandings(finalPlacement);
+	const advancingTeams = rankTeamByPosition(finalPlacement.groups);
+	displayAdvancingTeams(advancingTeams);
+	return advancingTeams;
 }
 
 function simulateMatch(team1, team2) {
-	const FORM_IMPACT = 1;
+	const FORM_IMPACT = 0.5;
 	const RANKING_IMPACT = 1.5;
-	const team1Score =
-		Math.random() +
-		(team1.Form * FORM_IMPACT + (70 - team1.FIBARanking) * RANKING_IMPACT);
-	const team2Score =
-		Math.random() +
-		(team2.Form * FORM_IMPACT + (70 - team2.FIBARanking) * RANKING_IMPACT);
 
-	const team1FinalScore = Math.round(team1Score);
-	const team2FinalScore = Math.round(team2Score);
+	let team1FinalScore = Math.round(
+		Math.random() +
+			(team1.Form * FORM_IMPACT +
+				(70 - team1.FIBARanking) * RANKING_IMPACT)
+	);
+	let team2FinalScore = Math.round(
+		Math.random() +
+			(team2.Form * FORM_IMPACT +
+				(70 - team2.FIBARanking) * RANKING_IMPACT)
+	);
+
+	while (team1FinalScore === team2FinalScore) {
+		team1FinalScore += Math.round(Math.random());
+		team2FinalScore += Math.round(Math.random());
+	}
+
+	const [team1Form, team2Form] = calculateForm(
+		{ ...team1, Score: team1FinalScore },
+		{ ...team2, Score: team2FinalScore }
+	);
 
 	return {
 		team1: team1.Team,
 		team2: team2.Team,
 		team1FinalScore,
 		team2FinalScore,
+		team1Form,
+		team2Form,
 	};
 }
 
-function displayResults(resultsByRound) {
-	resultsByRound.forEach((roundResult) => {
-		console.log(`Grupna faza - Kolo ${roundResult.round}:`);
-		Object.keys(roundResult.groups).forEach((group) => {
-			console.log(`    Grupa ${group}:`);
-			roundResult.groups[group].forEach((match) => {
-				console.log(
-					`        ${match.team1} - ${match.team2} (${match.team1FinalScore}:${match.team2FinalScore})`
-				);
-			});
-		});
-	});
-}
+function calculateForm(team1, team2) {
+	const pointDifference = team1.Score - team2.Score;
+	const rankingDifference = team1.FIBARanking - team2.FIBARanking;
 
-function printFinalStandings(finalPlacement) {
-	console.log('Konačan plasman u grupama:');
+	let team1Form = pointDifference / 10;
+	let team2Form = -team1Form;
 
-	Object.keys(finalPlacement.groups).forEach((group) => {
-		console.log(
-			`    Grupa ${group} (Ime - pobede/porazi/bodovi/postignuti koševi/primljeni koševi/koš razlika)::`
-		);
-		finalPlacement.groups[group].forEach((team, index) => {
-			const formattedPointDifference =
-				team.pointDifference >= 0
-					? `+${team.pointDifference}`
-					: `${team.pointDifference}`;
-			console.log(
-				`        ${index + 1}. ${team.team} ${team.wins} / ${
-					team.losses
-				} / ${team.points} / ${team.scored} / ${
-					team.conceded
-				} / ${formattedPointDifference}`
-			);
-		});
-	});
+	const rankingAdjustment =
+		rankingDifference > 0
+			? rankingDifference / 10
+			: -rankingDifference / 20;
+
+	if (pointDifference > 0) {
+		team1Form += rankingAdjustment;
+	} else {
+		team2Form += rankingAdjustment;
+	}
+
+	return [team1Form, team2Form];
 }
 
 function initializeFinalPlacement(groupStageMatches) {
@@ -135,7 +111,6 @@ function initializeFinalPlacement(groupStageMatches) {
 	Object.keys(groupStageMatches).forEach((group) => {
 		finalPlacement.groups[group] = [];
 		const groupTeams = groupStageMatches[group];
-
 		groupTeams.forEach((team) => {
 			finalPlacement.groups[group].push({
 				team: team.Team,
@@ -145,9 +120,46 @@ function initializeFinalPlacement(groupStageMatches) {
 				scored: 0,
 				conceded: 0,
 				pointDifference: 0,
+				headToHead: {},
 			});
 		});
 	});
 
 	return finalPlacement;
+}
+
+function updateTable(matchResult, finalPlacement) {
+	const [team1Stats, team2Stats] = [matchResult.team1, matchResult.team2].map(
+		(team) => finalPlacement.find((t) => t.team === team)
+	);
+
+	if (matchResult.team1FinalScore > matchResult.team2FinalScore) {
+		team1Stats.wins += 1;
+		team2Stats.losses += 1;
+	} else {
+		team2Stats.wins += 1;
+		team1Stats.losses += 1;
+	}
+
+	team1Stats.points = team1Stats.wins * 2 + team1Stats.losses;
+	team2Stats.points = team2Stats.wins * 2 + team2Stats.losses;
+
+	team1Stats.scored += matchResult.team1FinalScore;
+	team1Stats.conceded += matchResult.team2FinalScore;
+
+	team2Stats.scored += matchResult.team2FinalScore;
+	team2Stats.conceded += matchResult.team1FinalScore;
+
+	team1Stats.pointDifference +=
+		matchResult.team1FinalScore - matchResult.team2FinalScore;
+	team2Stats.pointDifference +=
+		matchResult.team2FinalScore - matchResult.team1FinalScore;
+
+	team1Stats.headToHead[team2Stats.team] =
+		(team1Stats.headToHead[team2Stats.team] || 0) +
+		(matchResult.team1FinalScore - matchResult.team2FinalScore);
+
+	team2Stats.headToHead[team1Stats.team] =
+		(team2Stats.headToHead[team1Stats.team] || 0) +
+		(matchResult.team2FinalScore - matchResult.team1FinalScore);
 }
