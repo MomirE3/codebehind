@@ -31,6 +31,6 @@ export function rankTeamByPosition(groups) {
 		})),
 	];
 
-	const advancingTeams = finalRanking.filter((team) => team.rank <= 8);
+	const advancingTeams = finalRanking.slice(0, 8);
 	return advancingTeams;
 }

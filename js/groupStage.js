@@ -5,6 +5,7 @@ import {
 } from './printResult.js';
 import { bubbleSort } from './sort.js';
 import { rankTeamByPosition } from './rankTeambyPosition.js';
+import { simulateMatch } from './simulateMatch.js';
 
 export function groupStageResults(groupStageMatches) {
 	const resultsByRound = [];
@@ -49,62 +50,6 @@ export function groupStageResults(groupStageMatches) {
 	return advancingTeams;
 }
 
-function simulateMatch(team1, team2) {
-	const FORM_IMPACT = 0.5;
-	const RANKING_IMPACT = 1.5;
-
-	let team1FinalScore = Math.round(
-		Math.random() +
-			(team1.Form * FORM_IMPACT +
-				(70 - team1.FIBARanking) * RANKING_IMPACT)
-	);
-	let team2FinalScore = Math.round(
-		Math.random() +
-			(team2.Form * FORM_IMPACT +
-				(70 - team2.FIBARanking) * RANKING_IMPACT)
-	);
-
-	while (team1FinalScore === team2FinalScore) {
-		team1FinalScore += Math.round(Math.random());
-		team2FinalScore += Math.round(Math.random());
-	}
-
-	const [team1Form, team2Form] = calculateForm(
-		{ ...team1, Score: team1FinalScore },
-		{ ...team2, Score: team2FinalScore }
-	);
-
-	return {
-		team1: team1.Team,
-		team2: team2.Team,
-		team1FinalScore,
-		team2FinalScore,
-		team1Form,
-		team2Form,
-	};
-}
-
-function calculateForm(team1, team2) {
-	const pointDifference = team1.Score - team2.Score;
-	const rankingDifference = team1.FIBARanking - team2.FIBARanking;
-
-	let team1Form = pointDifference / 10;
-	let team2Form = -team1Form;
-
-	const rankingAdjustment =
-		rankingDifference > 0
-			? rankingDifference / 10
-			: -rankingDifference / 20;
-
-	if (pointDifference > 0) {
-		team1Form += rankingAdjustment;
-	} else {
-		team2Form += rankingAdjustment;
-	}
-
-	return [team1Form, team2Form];
-}
-
 function initializeFinalPlacement(groupStageMatches) {
 	const finalPlacement = { groups: {} };
 
@@ -121,6 +66,8 @@ function initializeFinalPlacement(groupStageMatches) {
 				conceded: 0,
 				pointDifference: 0,
 				headToHead: {},
+				FIBARanking: team.FIBARanking,
+				Form: team.Form,
 			});
 		});
 	});
@@ -143,6 +90,9 @@ function updateTable(matchResult, finalPlacement) {
 
 	team1Stats.points = team1Stats.wins * 2 + team1Stats.losses;
 	team2Stats.points = team2Stats.wins * 2 + team2Stats.losses;
+
+	team1Stats.Form += matchResult.team1Form;
+	team2Stats.Form += matchResult.team2Form;
 
 	team1Stats.scored += matchResult.team1FinalScore;
 	team1Stats.conceded += matchResult.team2FinalScore;
